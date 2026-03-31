@@ -168,5 +168,6 @@ cython_debug/
 log
 # examples
 
+data/tensorboard
 output/
 .vscode/

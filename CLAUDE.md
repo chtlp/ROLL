@@ -51,6 +51,15 @@ ROLL (Reinforcement Learning Optimization for Large-Scale Learning) is an effici
 - **Clean logic**: Keep core logic clean and push implementation details to the edges
 - **File Organsiation**: Balance file organization with simplicity - use an appropriate number of files for the project scale
 
+## Environment Setup
+
+**CRITICAL**: Always use the `.venv` virtual environment in the project root:
+```bash
+source .venv/bin/activate
+```
+
+All dependencies (including Flash Attention 3) are installed in `.venv`. Running commands without activating this environment will fail with import errors.
+
 ## Common Development Commands
 
 ### Running Pipelines

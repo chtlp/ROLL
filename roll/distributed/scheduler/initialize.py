@@ -61,8 +61,19 @@ def init():
 
     manual_start = start_ray_cluster()
 
+    venv_root = os.environ.get("VIRTUAL_ENV")
+    if venv_root is None:
+        venv_root = os.path.join(os.path.dirname(__file__), "../..")
+    python_version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    venv_site_packages = os.path.join(venv_root, "lib", python_version, "site-packages")
+
+    env_vars = current_platform.get_custom_env_vars().copy()
+    current_pythonpath = os.environ.get("PYTHONPATH", "")
+    if venv_site_packages not in current_pythonpath:
+        env_vars["PYTHONPATH"] = f"{venv_site_packages}:{current_pythonpath}" if current_pythonpath else venv_site_packages
+
     runtime_env = {
-        "env_vars": current_platform.get_custom_env_vars(),
+        "env_vars": env_vars,
     }
 
     if not ray.is_initialized():
