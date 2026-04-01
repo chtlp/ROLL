@@ -2,9 +2,14 @@ from roll.utils.logging import get_logger
 
 logger = get_logger()
 
-from vllm.transformers_utils.configs.qwen3_5 import Qwen3_5TextConfig
-from vllm.transformers_utils.configs.qwen3_5_moe import Qwen3_5MoeTextConfig
-from transformers.configuration_utils import PretrainedConfig, layer_type_validation
+try:
+    from vllm.transformers_utils.configs.qwen3_5 import Qwen3_5TextConfig
+    from vllm.transformers_utils.configs.qwen3_5_moe import Qwen3_5MoeTextConfig
+    from transformers.configuration_utils import layer_type_validation
+except ImportError:
+    Qwen3_5TextConfig = None
+    Qwen3_5MoeTextConfig = None
+    layer_type_validation = None
 
 def Qwen3_5TextConfig_init(
     self,
@@ -168,5 +173,68 @@ def Qwen3_5MoeTextConfig_init(
     self.eos_token_id = eos_token_id
     self.tie_word_embeddings = tie_word_embeddings
 
-Qwen3_5TextConfig.__init__ = Qwen3_5TextConfig_init
-Qwen3_5MoeTextConfig.__init__ = Qwen3_5MoeTextConfig_init
+if Qwen3_5TextConfig is not None and Qwen3_5MoeTextConfig is not None and layer_type_validation is not None:
+    Qwen3_5TextConfig.__init__ = Qwen3_5TextConfig_init
+    Qwen3_5MoeTextConfig.__init__ = Qwen3_5MoeTextConfig_init
+
+try:
+    import contextlib
+    import copy
+    from typing import Any
+
+    AnyTokenizer = Any
+
+    def _patched_get_cached_tokenizer(tokenizer: AnyTokenizer) -> AnyTokenizer:
+        cached_tokenizer = copy.copy(tokenizer)
+
+        tokenizer_all_special_ids = tokenizer.all_special_ids
+        tokenizer_all_special_tokens = tokenizer.all_special_tokens
+        try:
+            tokenizer_all_special_tokens_extended = tokenizer.all_special_tokens_extended
+        except AttributeError:
+            tokenizer_all_special_tokens_extended = None
+        tokenizer_vocab = tokenizer.get_vocab()
+        tokenizer_len = len(tokenizer)
+
+        max_token_id = max(tokenizer_vocab.values())
+        if hasattr(tokenizer, "vocab_size"):
+            with contextlib.suppress(NotImplementedError):
+                max_token_id = max(max_token_id, tokenizer.vocab_size)
+
+        class CachedTokenizer(tokenizer.__class__):
+
+            @property
+            def all_special_ids(self) -> list[int]:
+                return tokenizer_all_special_ids
+
+            @property
+            def all_special_tokens(self) -> list[str]:
+                return tokenizer_all_special_tokens
+
+            @property
+            def all_special_tokens_extended(self):
+                return tokenizer_all_special_tokens_extended
+
+            @property
+            def max_token_id(self) -> int:
+                return max_token_id
+
+            def get_vocab(self) -> dict[str, int]:
+                return tokenizer_vocab
+
+            def __len__(self) -> int:
+                return tokenizer_len
+
+            def __reduce__(self):
+                return _patched_get_cached_tokenizer, (tokenizer, )
+
+        CachedTokenizer.__name__ = f"Cached{tokenizer.__class__.__name__}"
+
+        cached_tokenizer.__class__ = CachedTokenizer
+        return cached_tokenizer
+
+    import vllm.transformers_utils.tokenizer
+
+    vllm.transformers_utils.tokenizer.get_cached_tokenizer = _patched_get_cached_tokenizer
+except ImportError:
+    logger.exception("Failed to apply vLLM transformers compatibility patch.")
