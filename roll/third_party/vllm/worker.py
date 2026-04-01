@@ -134,8 +134,13 @@ class WorkerBase:
         self.load_weights(weights=weights_iter())
 
     def update_parameter_in_bucket(self, serialized_named_tensors, is_lora=False):
+        import os
         monkey_patch_torch_reductions()
         bucket_with_meta = MultiprocessingSerializer.deserialize(serialized_named_tensors[self.rank])
+        # Move bucket to GPU if USE_CPU_IPC is enabled and bucket is on CPU
+        use_cpu_ipc = os.getenv("USE_CPU_IPC", "true").lower() == "true"
+        if use_cpu_ipc and bucket_with_meta["bucket"].device.type == "cpu":
+            bucket_with_meta["bucket"] = bucket_with_meta["bucket"].cuda()
         named_params = named_tensors_from_bucket(**bucket_with_meta)
         if is_lora:
             for name, weight in named_params:

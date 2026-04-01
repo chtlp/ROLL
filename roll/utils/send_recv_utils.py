@@ -1,4 +1,5 @@
 from typing import Dict
+import os
 
 import torch
 from torch.multiprocessing import reductions
@@ -273,7 +274,13 @@ def serialize_named_weights(named_weights: list[tuple[str, torch.Tensor]], infer
     if not getattr(bucket, "is_cuda", False):
         bucket = bucket.to(current_platform.device_type).contiguous()
 
-    monkey_patch_torch_reductions()
+    # Use CPU IPC to avoid CUDA IPC permission issues in containers (configurable via USE_CPU_IPC env var)
+    use_cpu_ipc = os.getenv("USE_CPU_IPC", "true").lower() == "true"
+    if use_cpu_ipc:
+        bucket = bucket.cpu()
+
+    if getattr(bucket, "is_cuda", False):
+        monkey_patch_torch_reductions()
 
     serialized_tensors = MultiprocessingSerializer.serialize({"bucket": bucket, "tensors_meta": tensors_meta})
     return serialized_tensors
